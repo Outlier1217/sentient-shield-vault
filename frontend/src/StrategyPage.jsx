@@ -564,16 +564,82 @@ Decision Matrix:
         </div>
 
         {/* Footer */}
-        <div style={{ 
-          textAlign: "center", 
-          padding: "clamp(20px, 5vw, 32px)", 
-          color: "#6b7280", 
-          borderTop: "1px solid #2a2a2a", 
-          marginTop: "clamp(20px, 5vw, 32px)"
-        }}>
-          <p style={{ color: "#9ca3af", fontSize: "clamp(12px, 3.5vw, 14px)" }}>🔥 Sentient Shield Vault — DeFi that doesn't wait, it acts.</p>
-          <p style={{ fontSize: "clamp(10px, 3vw, 12px)", color: "#6b7280" }}>Built on HashKey Chain | Powered by NexaID | Secured by ShieldBot</p>
-        </div>
+<div style={{ 
+  textAlign: "center", 
+  padding: "clamp(20px, 5vw, 32px)", 
+  color: "#6b7280", 
+  borderTop: "1px solid #2a2a2a", 
+  marginTop: "clamp(20px, 5vw, 32px)"
+}}>
+  <p style={{ color: "#9ca3af", fontSize: "clamp(12px, 3.5vw, 14px)", marginBottom: "12px" }}>
+    🔥 Sentient Shield Vault — DeFi that doesn't wait, it acts.
+  </p>
+  <div style={{
+    display: "flex",
+    justifyContent: "center",
+    gap: "clamp(20px, 5vw, 32px)",
+    flexWrap: "wrap",
+    marginBottom: "12px"
+  }}>
+    <a 
+      href="https://github.com/Outlier1217/sentient-shield-vault" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      style={{
+        color: "#9ca3af",
+        textDecoration: "none",
+        fontSize: "clamp(12px, 3.5vw, 14px)",
+        transition: "color 0.2s",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px"
+      }}
+      onMouseEnter={(e) => e.target.style.color = "#3b82f6"}
+      onMouseLeave={(e) => e.target.style.color = "#9ca3af"}
+    >
+      📦 GitHub
+    </a>
+    <a 
+      href="https://t.me/ssv_defi_bot" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      style={{
+        color: "#9ca3af",
+        textDecoration: "none",
+        fontSize: "clamp(12px, 3.5vw, 14px)",
+        transition: "color 0.2s",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px"
+      }}
+      onMouseEnter={(e) => e.target.style.color = "#3b82f6"}
+      onMouseLeave={(e) => e.target.style.color = "#9ca3af"}
+    >
+      🤖 Telegram Bot
+    </a>
+    <a 
+      href="https://www.youtube.com/@Outlier1217" 
+      target="_blank" 
+      rel="noopener noreferrer"
+      style={{
+        color: "#9ca3af",
+        textDecoration: "none",
+        fontSize: "clamp(12px, 3.5vw, 14px)",
+        transition: "color 0.2s",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "8px"
+      }}
+      onMouseEnter={(e) => e.target.style.color = "#3b82f6"}
+      onMouseLeave={(e) => e.target.style.color = "#9ca3af"}
+    >
+      📺 YouTube
+    </a>
+  </div>
+  <p style={{ fontSize: "clamp(10px, 3vw, 12px)", color: "#6b7280", margin: 0 }}>
+    Built on HashKey Chain | Powered by NexaID | Secured by ShieldBot
+  </p>
+</div>
       </div>
     </div>
   );
