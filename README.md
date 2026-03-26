@@ -12,6 +12,7 @@
 * 🔐 **Identity-based access (NexaID)**
 * 🎮 **Gamified rewards system**
 * 🛡️ **Pre-transaction security (ShieldBot)**
+* 🤖 **Telegram-native control layer (SSV Bot)**
 
 Unlike traditional DeFi vaults, SSV introduces a **trust-aware, intelligent, and self-operating financial system**.
 
@@ -53,6 +54,15 @@ SSV solves these issues by integrating:
 * Pre-transaction risk analysis
 * Blocks unsafe actions
 
+### 🤖 Telegram Control Layer (SSV Bot)
+
+* 📊 Live portfolio tracking (Deposit, Rewards, XP, Level)
+* 🔐 NexaID verification + reputation score
+* 🎁 Automatic reward alerts
+* 🛡️ Risk alerts (ShieldBot integration)
+* 🔄 Rebalance notifications
+* 🚀 Direct access to dApp via Telegram
+
 ---
 
 ## 🏗️ Architecture
@@ -63,7 +73,14 @@ SSV solves these issues by integrating:
 * **MockUSDC.sol** → Test token
 * **MockNexaID.sol** → Identity + reputation system
 
+
 ---
+
+User → Telegram Bot → Backend (Node.js)
+                     ↓
+              Smart Contracts (Vault + NexaID)
+                     ↓
+              HashKey Chain Testnet
 
 ## ⚙️ Core Features
 
@@ -137,6 +154,17 @@ Example:
 * Level 5 → +25%
 * Max → +50%
 
+## 🤖 Telegram Bot Features
+
+* /connect → Link wallet address
+* /dashboard → Live DeFi portfolio
+* /verify → NexaID verification + score
+* 🎁 Auto alerts → Reward notifications
+* 🛡️ Risk alerts → High exposure warnings
+* 🏆 Leaderboard → Gamified ranking
+* 🔗 Deep link → Open dApp directly
+
+
 ---
 
 ## 🛡️ Security Layer
@@ -176,6 +204,10 @@ Example:
   * Yield generation
   * XP tracking
   * ShieldBot modal
+  * Telegram Integration
+  * Telegram Bot acts as control layer
+  * Enables Web2 UX + Web3 data
+  * No need to open dApp repeatedly
 
 ---
 
@@ -198,11 +230,21 @@ Detailed technical documentation available in UI
 * React (Vite)
 * Ethers.js
 
+### Backend (Bot)
+
+* Node.js
+* Grammy
+* Ethers.js
+
 ### Blockchain
 
 * HashKey Chain Testnet
 
 ---
+
+### 🔗 Telegram Bot
+
+*👉 Bot Repository:
 
 ## 🛠️ Setup & Run
 
@@ -269,6 +311,13 @@ npm run dev
 8. Claim rewards
 9. Rebalance for bounty
 
+10. Open Telegram Bot
+11. Open Telegram Bot
+12. /connect wallet
+13. /dashboard → View live stats
+14. Receive 🎁 reward alerts automatically
+15. Check /verify → reputation score
+
 ---
 
 ## 🔥 Innovation
@@ -278,6 +327,7 @@ npm run dev
 * Keeperless incentives
 * AI-driven allocation
 * Security-first UX
+* 🤖 Telegram-native DeFi control layer
 
 ---
 
@@ -306,7 +356,7 @@ npm run dev
 Sentient Shield Vault is not just a vault —
 it is a **next-generation DeFi system** combining:
 
-> **AI + Identity + Incentives + Security**
+> **AI + Identity + Incentives + Security + Real-time Telegram Control**
 
 ---
 
