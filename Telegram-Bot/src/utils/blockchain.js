@@ -4,7 +4,7 @@ const RPC_URL = "https://testnet.hsk.xyz";
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 
 const VAULT_ADDRESS = "0x78c37Dcb5C3C072DAfb9D4e28638BBcdf297FeeB";
-const NEXAID_ADDRESS = "0x3a21b6C601B599AB9460e689f4cBb051e5737d0e";
+const NEXAID_ADDRESS = "0xe5A9A3B722567d8B7Ef728C1A5322Bf1Aa71553c";
 
 const ABI = [
   "function balances(address) view returns (uint256)",
@@ -15,7 +15,8 @@ const ABI = [
 ];
 
 const NEXA_ABI = [
-  "function getScore(address) view returns (uint256)"
+  "function getScore(address) view returns (uint256)",
+  "function verify(address) view returns (bool)"
 ];
 
 const contract = new ethers.Contract(VAULT_ADDRESS, ABI, provider);
@@ -23,32 +24,64 @@ const nexaContract = new ethers.Contract(NEXAID_ADDRESS, NEXA_ABI, provider);
 
 export async function getUserData(wallet) {
   try {
-    const [deposit, userXP, userLevel, reward, verified, score] = await Promise.all([
-      contract.balances(wallet),
-      contract.xp(wallet),
-      contract.level(wallet),
-      contract.rewards(wallet),
-      contract.isVerified(wallet),
-      nexaContract.getScore(wallet)
-    ]);
+    console.log(`🔍 Fetching data for wallet: ${wallet}`);
+    
+    // 🔹 Get NexaID score
+    let score = "0";
+    let verified = false;
+    try {
+      score = await nexaContract.getScore(wallet);
+      verified = await nexaContract.verify(wallet);
+      console.log(`✅ NexaID: Score=${score.toString()}, Verified=${verified}`);
+    } catch (e) {
+      console.log("⚠️ NexaID fetch failed:", e.message);
+    }
+
+    // 🔹 Try Vault data
+    let deposit = "0";
+    let reward = "0";
+    let userXP = "0";
+    let userLevel = "1";
+    
+    try {
+      const [balance, xp, level, rewardsData] = await Promise.all([
+        contract.balances(wallet),
+        contract.xp(wallet),
+        contract.level(wallet),
+        contract.rewards(wallet)
+      ]);
+      
+      deposit = ethers.formatUnits(balance, 6);
+      reward = ethers.formatUnits(rewardsData, 6);
+      userXP = xp.toString();
+      userLevel = level.toString();
+      
+      console.log(`✅ Vault: Deposit=${deposit}, Reward=${reward}, XP=${userXP}, Level=${userLevel}`);
+      
+    } catch (e) {
+      console.log("⚠️ Vault fetch failed:", e.message);
+    }
+
+    // 🔹 Agar deposit 0 hai toh "—" show karo, warna actual value
+    const displayDeposit = (deposit === "0") ? "—" : deposit;
+    const displayReward = (reward === "0") ? "—" : reward;
 
     return {
-      deposit: ethers.formatUnits(deposit, 6),
-      xp: userXP.toString(),
-      level: userLevel.toString(),
-      reward: ethers.formatUnits(reward, 6),
-      verified,
+      deposit: displayDeposit,
+      xp: userXP,
+      level: userLevel,
+      reward: displayReward,
+      verified: verified,
       score: score.toString()
     };
 
   } catch (err) {
-    console.log("ERROR:", err.shortMessage || err.message);
-
+    console.log("❌ ERROR:", err.message);
     return {
-      deposit: "0",
+      deposit: "—",
       xp: "0",
-      level: "0",
-      reward: "0",
+      level: "1",
+      reward: "—",
       verified: false,
       score: "0"
     };

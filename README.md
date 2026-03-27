@@ -243,16 +243,24 @@ Detailed technical documentation available in UI
 
 ### 🔗 Telegram Bot
 
-*👉 Bot Repository:
+*👉 https://t.me/ssv_defi_bot
 
 ## 🛠️ Setup & Run
 
 ### 1️⃣ Clone repo
 
 ```bash
-git clone <your-repo>
+git clone https://github.com/Outlier1217/sentient-shield-vault
 cd defi-vault
 ```
+
+### 🔗 Demo Video
+
+*👉 https://youtu.be/VxmpqMxuk7E
+
+### 🔗 Prototype
+
+*👉 https://mprot.store/
 
 ---
 
@@ -334,7 +342,6 @@ npm run dev
 
 * Chainlink / Pyth integration
 * Real AI signal engine
-* ZK identity (production NexaID)
 * DAO governance
 * NFT-based reputation
 
