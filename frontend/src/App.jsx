@@ -1,13 +1,13 @@
-// App.jsx - Complete Fixed Version
+// App.jsx - Complete Fixed Version with Self-Verify
 import { useState, useEffect } from "react";
 import { ethers } from "ethers";
 import { BrowserRouter, Routes, Route, Link } from "react-router-dom";
 import StrategyPage from "./StrategyPage";
 
-// ✅ HashKey Testnet Addresses (Update after deployment)
+// ✅ Updated HashKey Testnet Addresses
 const usdcAddress = "0x84b6a3e3a7ffE62D339524d7C678c252aBD2d4b0";
 const vaultAddress = "0x78c37Dcb5C3C072DAfb9D4e28638BBcdf297FeeB";
-const nexaidAddress = "0x3a21b6C601B599AB9460e689f4cBb051e5737d0e";
+const nexaidAddress = "0xe5A9A3B722567d8B7Ef728C1A5322Bf1Aa71553c"; 
 
 const usdcAbi = [
   "function mint(address to, uint amount)",
@@ -37,10 +37,13 @@ const vaultAbi = [
   "function getNextLevelXP(address) view returns (uint)"
 ];
 
+// ✅ Updated NexaID ABI with self-verify functions
 const nexaidAbi = [
   "function verify(address) view returns (bool)",
   "function getScore(address) view returns (uint)",
-  "function setUser(address, bool, uint) returns (bool)"
+  "function setUser(address, bool, uint) returns (bool)",
+  "function verifyMe()",
+  "function selfVerify(uint)"
 ];
 
 function VaultApp() {
@@ -177,7 +180,7 @@ function VaultApp() {
     }
   };
   
-  // ✅ Verify with NexaID
+  // ✅ Updated Verify with NexaID (Self-Verify for all users)
   const verifyWithNexaID = async () => {
     if (!signer || !account) {
       setStatus("❌ Please connect wallet first");
@@ -188,16 +191,45 @@ function VaultApp() {
       setLoading(true);
       setStatus("⏳ Verifying with NexaID...");
       
-      const nexaid = new ethers.Contract(nexaidAddress, nexaidAbi, signer);
-      const tx = await nexaid.setUser(account, true, 750);
+      const nexaid = new ethers.Contract(nexaidAddress, [
+        "function verifyMe()",
+        "function selfVerify(uint)",
+        "function verify(address) view returns (bool)",
+        "function getScore(address) view returns (uint)"
+      ], signer);
+      
+      let tx;
+      
+      // Try verifyMe first (simplest)
+      try {
+        tx = await nexaid.verifyMe();
+      } catch (err1) {
+        console.log("verifyMe failed, trying selfVerify...");
+        // Try selfVerify with score 750
+        tx = await nexaid.selfVerify(750);
+      }
+      
       await tx.wait();
       
       setStatus("✅ NexaID Verified Successfully! Score: 750");
       await loadNexaID(signer, account);
       await loadGamification(signer, account);
+      
     } catch (err) {
       console.error("Verification error:", err);
-      setStatus("❌ NexaID verification failed. Please try again.");
+      
+      // Check if already verified
+      const nexaid = new ethers.Contract(nexaidAddress, [
+        "function verify(address) view returns (bool)"
+      ], signer);
+      
+      const isVerified = await nexaid.verify(account);
+      if (isVerified) {
+        setStatus("✅ Already verified with NexaID!");
+        await loadNexaID(signer, account);
+      } else {
+        setStatus("❌ NexaID verification failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -801,7 +833,6 @@ function App() {
     </BrowserRouter>
   );
 }
-
 
 // Footer Component
 function Footer() {

@@ -11,7 +11,7 @@
 * 🧠 **AI-driven allocation**
 * 🔐 **Identity-based access (NexaID)**
 * 🎮 **Gamified rewards system**
-* 🛡️ **Pre-transaction security (ShieldBot)**
+* 🛡️ **Pre-transaction security**
 * 🤖 **Telegram-native control layer (SSV Bot)**
 
 Unlike traditional DeFi vaults, SSV introduces a **trust-aware, intelligent, and self-operating financial system**.
@@ -49,7 +49,7 @@ SSV solves these issues by integrating:
 * XP & Level system
 * Reward multipliers
 
-### 🛡️ ShieldBot Security
+### 🛡️Security
 
 * Pre-transaction risk analysis
 * Blocks unsafe actions
@@ -59,7 +59,7 @@ SSV solves these issues by integrating:
 * 📊 Live portfolio tracking (Deposit, Rewards, XP, Level)
 * 🔐 NexaID verification + reputation score
 * 🎁 Automatic reward alerts
-* 🛡️ Risk alerts (ShieldBot integration)
+* 🛡️ Risk alerts
 * 🔄 Rebalance notifications
 * 🚀 Direct access to dApp via Telegram
 
@@ -169,7 +169,7 @@ Example:
 
 ## 🛡️ Security Layer
 
-### ShieldBot (Frontend)
+### (Frontend)
 
 * Risk scoring before transactions
 * Blocks high-risk actions
@@ -182,7 +182,7 @@ Example:
 | ----------- | -------------------------------------------- |
 | 💰 MockUSDC | `0x84b6a3e3a7ffE62D339524d7C678c252aBD2d4b0` |
 | 🏦 Vault    | `0x78c37Dcb5C3C072DAfb9D4e28638BBcdf297FeeB` |
-| 🔐 NexaID   | `0x3a21b6C601B599AB9460e689f4cBb051e5737d0e` |
+| 🔐 NexaID   | `0xe5A9A3B722567d8B7Ef728C1A5322Bf1Aa71553c` |
 
 ### 👤 Owner Wallet
 
@@ -203,7 +203,6 @@ Example:
   * Deposit / Withdraw
   * Yield generation
   * XP tracking
-  * ShieldBot modal
   * Telegram Integration
   * Telegram Bot acts as control layer
   * Enables Web2 UX + Web3 data
