@@ -1,250 +1,194 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-interface IERC20 {
-    function transferFrom(address from, address to, uint amount) external returns (bool);
-    function transfer(address to, uint amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint);
-}
+// ─────────────────────────────────────────────
+//  FILE 3 — Vault.sol  ← DEPLOY THIS ONE ONLY
+//  Deploy order:
+//    1. Deploy Vault.sol (it imports VaultOracle + VaultBase automatically)
+//    2. Constructor args: (_usdc, _nexaid, _pair)
+//       • _nexaid can be address(0) if not using NexaID
+// ─────────────────────────────────────────────
 
-// ✅ NexaID Interface for ZK Identity
-interface INexaID {
-    function verify(address user) external view returns (bool);
-    function getScore(address user) external view returns (uint);
-}
+import "./VaultOracle.sol";
 
-contract Vault {
+contract Vault is VaultOracle {
 
-    IERC20 public usdc;
-    INexaID public nexaid;
-
-    // User data
-    mapping(address => uint) public balances;
-    mapping(address => uint) public lastHarvest;
-    mapping(address => uint) public rewards;
-    
-    // ✅ Gamification
-    mapping(address => uint) public xp;
-    mapping(address => uint) public level;
-    
-    // ✅ Bounty system
-    mapping(address => uint) public bountiesEarned;
-    
-    // Vault stats
-    uint public totalDeposits;
-    uint public totalYield;
-    
-    // Allocation
-    uint public alphaVault;
-    uint public stableCore;
-    uint public riskGuard;
-    
-    // Settings
-    uint public harvestCooldown = 60;
-    uint public performanceFee = 10;
-    uint public rebalanceBounty = 5; // 0.05% of totalDeposits
-    
-    address public owner;
-    bool public paused;
-    
-    // ✅ Events
-    event Deposited(address indexed user, uint amount);
-    event Withdrawn(address indexed user, uint amount);
-    event Harvested(address indexed user, uint reward, uint bonus);
-    event YieldGenerated(uint amount);
-    event Rebalanced(uint signal, uint alpha, uint stable, uint risk);
-    event XPEarned(address indexed user, uint amount, uint newXP);
-    event LevelUp(address indexed user, uint newLevel);
-    event BountyPaid(address indexed user, uint amount);
-    event NexaIDVerified(address indexed user, bool verified, uint score);
-
-    modifier onlyOwner() {
-        require(msg.sender == owner, "Not owner");
-        _;
+    // ─── Structs ──────────────────────────────
+    struct UserInfo {
+        uint balance;
+        uint reward;
+        uint userXP;
+        uint userLevel;
+        uint lastHarvestTime;
+        uint nextLevelXP;
+        uint levelBonus;
+        uint reputationBonus;
     }
 
-    modifier notPaused() {
-        require(!paused, "Paused");
-        _;
-    }
-    
-    // ✅ Only verified users can deposit/withdraw
-    modifier onlyVerified() {
-        if (address(nexaid) != address(0)) {
-            require(nexaid.verify(msg.sender), "NexaID: Identity not verified");
-        }
-        _;
-    }
+    // ─── Constructor ──────────────────────────
+    constructor(address _usdc, address _nexaid, address _pair) {
+        require(_usdc != address(0), "Invalid USDC address");
+        require(_pair != address(0), "Invalid pair address");
 
-    constructor(address _usdc, address _nexaid) {
         usdc = IERC20(_usdc);
         if (_nexaid != address(0)) {
             nexaid = INexaID(_nexaid);
         }
+        pair  = _pair;
         owner = msg.sender;
+
+        harvestCooldown  = 60;
+        performanceFee   = 10;
+        rebalanceBounty  = 5;
+        maxLevelBonus    = 50;
+        marketSignal     = 50;
+        useDEXSignal     = true;
+
+        bullishThreshold = 3000e18;
+        bearishThreshold = 2000e18;
+
+        minValidPrice = 1000e18;
+        maxValidPrice = 10000e18;
+
+        keepers[msg.sender] = true;
+        locked = false;
     }
 
-    // ✅ Deposit with NexaID verification
-    function deposit(uint amount) external notPaused onlyVerified {
+    // ─── Core vault actions ───────────────────
+    function deposit(uint amount) external nonReentrant notPaused onlyVerified {
         require(amount > 0, "Invalid amount");
-        
-        usdc.transferFrom(msg.sender, address(this), amount);
-        
+
+        uint balBefore = usdc.balanceOf(address(this));
+        require(usdc.transferFrom(msg.sender, address(this), amount), "Transfer failed");
+        uint balAfter  = usdc.balanceOf(address(this));
+        require(balAfter == balBefore + amount, "Transfer amount mismatch");
+
         balances[msg.sender] += amount;
-        totalDeposits += amount;
-        
+        totalDeposits        += amount;
+
         _allocate(amount);
-        
-        // ✅ Add XP for deposit
         _addXP(msg.sender, 10);
-        
+
         emit Deposited(msg.sender, amount);
     }
 
-    // ✅ Withdraw
-    function withdraw(uint amount) external notPaused onlyVerified {
+    function withdraw(uint amount) external nonReentrant notPaused onlyVerified {
         require(balances[msg.sender] >= amount, "Insufficient balance");
-        
-        uint contractBalance = usdc.balanceOf(address(this));
-        require(contractBalance >= amount, "Vault liquidity low");
-        
+        require(usdc.balanceOf(address(this)) >= amount, "Vault liquidity low");
+
         balances[msg.sender] -= amount;
-        totalDeposits -= amount;
-        
-        usdc.transfer(msg.sender, amount);
-        
-        // ✅ Add XP for withdrawal
+        totalDeposits        -= amount;
+
+        require(usdc.transfer(msg.sender, amount), "Transfer failed");
+
         _addXP(msg.sender, 5);
-        
+
         emit Withdrawn(msg.sender, amount);
     }
 
-    // ✅ Generate yield (owner only)
     function generateYield(uint amount) external onlyOwner {
+        require(amount > 0, "Amount must be greater than 0");
         require(usdc.balanceOf(address(this)) >= amount, "Not enough USDC");
         totalYield += amount;
-        
+
         emit YieldGenerated(amount);
     }
 
-    // ✅ Harvest with XP and level bonus
-    function harvest() external notPaused {
-        require(totalYield > 0, "No yield");
-        require(block.timestamp >= lastHarvest[msg.sender] + harvestCooldown, "Cooldown");
-        
+    function harvest() external nonReentrant notPaused {
+        require(totalYield > 0,    "No yield available");
+        require(totalDeposits > 0, "No deposits in vault");
+        require(
+            block.timestamp >= lastHarvest[msg.sender] + harvestCooldown,
+            "Harvest cooldown active"
+        );
+        require(balances[msg.sender] > 0, "No balance to harvest");
+
         uint userShare = (balances[msg.sender] * 1e18) / totalDeposits;
-        uint gross = (totalYield * userShare) / 1e18;
-        require(gross > 0, "No reward");
-        
-        uint fee = (gross * performanceFee) / 100;
+        uint gross     = (totalYield * userShare) / 1e18;
+        require(gross > 0, "No reward for user");
+
+        uint fee       = (gross * performanceFee) / 100;
         uint netReward = gross - fee;
-        
-        // ✅ Apply level bonus
+
         uint bonusPercent = _getLevelBonus(msg.sender);
-        uint bonus = (netReward * bonusPercent) / 100;
-        uint finalReward = netReward + bonus;
-        
+        uint bonus        = (netReward * bonusPercent) / 100;
+        uint finalReward  = netReward + bonus;
+
+        uint reputationBonus = getReputationBonus(msg.sender);
+        if (reputationBonus > 0) {
+            finalReward += (finalReward * reputationBonus) / 100;
+        }
+
         lastHarvest[msg.sender] = block.timestamp;
-        
+
+        totalYield          -= gross;
         rewards[msg.sender] += finalReward;
-        rewards[owner] += fee;
-        
-        totalYield -= gross;
-        
-        // ✅ Add XP for harvesting
+        rewards[owner]      += fee;
+
         _addXP(msg.sender, 25);
-        
+
         emit Harvested(msg.sender, finalReward, bonus);
     }
 
-    // ✅ Claim rewards
-    function claim() external {
+    function claim() external nonReentrant notPaused {
         uint reward = rewards[msg.sender];
-        require(reward > 0, "No reward");
-        
-        uint contractBalance = usdc.balanceOf(address(this));
-        require(contractBalance >= reward, "Vault liquidity low");
-        
+        require(reward > 0, "No rewards to claim");
+        require(usdc.balanceOf(address(this)) >= reward, "Insufficient vault liquidity");
+
         rewards[msg.sender] = 0;
-        usdc.transfer(msg.sender, reward);
-        
-        // ✅ Add XP for claiming
+        require(usdc.transfer(msg.sender, reward), "Transfer failed");
+
         _addXP(msg.sender, 15);
     }
 
-    // ✅ Rebalance with bounty
-    function rebalance() external notPaused {
+    function rebalance() external nonReentrant notPaused {
         uint signal = _getSignal();
-        
+
+        uint newAlpha;
+        uint newStable;
+        uint newRisk;
+
         if (signal > 70) {
-            alphaVault = (totalDeposits * 60) / 100;
-            stableCore = (totalDeposits * 25) / 100;
-            riskGuard = (totalDeposits * 15) / 100;
+            newAlpha  = (totalDeposits * 60) / 100;
+            newStable = (totalDeposits * 25) / 100;
+            newRisk   = (totalDeposits * 15) / 100;
         } else if (signal < 40) {
-            alphaVault = (totalDeposits * 30) / 100;
-            stableCore = (totalDeposits * 30) / 100;
-            riskGuard = (totalDeposits * 40) / 100;
+            newAlpha  = (totalDeposits * 30) / 100;
+            newStable = (totalDeposits * 30) / 100;
+            newRisk   = (totalDeposits * 40) / 100;
         } else {
-            alphaVault = (totalDeposits * 50) / 100;
-            stableCore = (totalDeposits * 30) / 100;
-            riskGuard = (totalDeposits * 20) / 100;
+            newAlpha  = (totalDeposits * 50) / 100;
+            newStable = (totalDeposits * 30) / 100;
+            newRisk   = (totalDeposits * 20) / 100;
         }
-        
-        // ✅ Pay bounty
+
+        alphaVault = newAlpha;
+        stableCore = newStable;
+        riskGuard  = newRisk;
+
         uint bounty = (totalDeposits * rebalanceBounty) / 10000;
         if (bounty > 0 && usdc.balanceOf(address(this)) >= bounty) {
-            usdc.transfer(msg.sender, bounty);
             bountiesEarned[msg.sender] += bounty;
+            require(usdc.transfer(msg.sender, bounty), "Bounty transfer failed");
             emit BountyPaid(msg.sender, bounty);
         }
-        
-        // ✅ Add XP for rebalancing
+
         _addXP(msg.sender, 20);
-        
+
         emit Rebalanced(signal, alphaVault, stableCore, riskGuard);
     }
 
-    // ✅ Internal: Add XP and handle level ups
-    function _addXP(address user, uint amount) internal {
-        xp[user] += amount;
-        uint newLevel = _calculateLevel(xp[user]);
-        
-        if (newLevel > level[user]) {
-            level[user] = newLevel;
-            emit LevelUp(user, newLevel);
-        }
-        
-        emit XPEarned(user, amount, xp[user]);
-    }
-    
-    // ✅ Calculate level from XP
-    function _calculateLevel(uint xpAmount) internal pure returns (uint) {
-        if (xpAmount < 100) return 1;
-        if (xpAmount < 300) return 2;
-        if (xpAmount < 600) return 3;
-        if (xpAmount < 1000) return 4;
-        if (xpAmount < 1500) return 5;
-        return 5 + (xpAmount - 1500) / 500;
-    }
-    
-    // ✅ Get level bonus (5% per level, max 50%)
-    function _getLevelBonus(address user) internal view returns (uint) {
-        uint userLevel = level[user];
-        if (userLevel > 10) return 50;
-        return userLevel * 5;
-    }
-    
-    // ✅ Get reputation bonus from NexaID
+    // ─── NexaID helpers ───────────────────────
     function getReputationBonus(address user) public view returns (uint) {
         if (address(nexaid) == address(0)) return 0;
         try nexaid.getScore(user) returns (uint score) {
             if (score > 800) return 20;
             if (score > 500) return 10;
+            if (score > 300) return 5;
         } catch {}
         return 0;
     }
-    
-    // ✅ Get NexaID verification status
+
     function isVerified(address user) public view returns (bool) {
         if (address(nexaid) == address(0)) return true;
         try nexaid.verify(user) returns (bool verified) {
@@ -253,60 +197,119 @@ contract Vault {
             return false;
         }
     }
-    
-    // ✅ Allocation
-    function _allocate(uint amount) internal {
-        uint signal = _getSignal();
-        
-        if (signal > 70) {
-            alphaVault += (amount * 60) / 100;
-            stableCore += (amount * 25) / 100;
-            riskGuard += (amount * 15) / 100;
-        } else if (signal < 40) {
-            alphaVault += (amount * 30) / 100;
-            stableCore += (amount * 30) / 100;
-            riskGuard += (amount * 40) / 100;
-        } else {
-            alphaVault += (amount * 50) / 100;
-            stableCore += (amount * 30) / 100;
-            riskGuard += (amount * 20) / 100;
-        }
-        
-        emit Rebalanced(signal, alphaVault, stableCore, riskGuard);
+
+    // ─── Level / XP view helpers ──────────────
+    function getNextLevelXP(address user) public view returns (uint) {
+        uint lvl = level[user];
+        if (lvl == 0) return 100;
+        if (lvl == 1) return 100;
+        if (lvl == 2) return 300;
+        if (lvl == 3) return 600;
+        if (lvl == 4) return 1000;
+        if (lvl == 5) return 1500;
+        return (lvl - 4) * 500 + 1500;
     }
-    
-    // ✅ Signal (can be upgraded to use Chainlink)
-    function _getSignal() internal pure returns (uint) {
-        return 75;
+
+    function getLevelBonus(address user) external view returns (uint) {
+        return _getLevelBonus(user);
     }
-    
-    // ✅ Get user's next level XP requirement
-    function getNextLevelXP(address user) external view returns (uint) {
-        uint currentLevel = level[user];
-        if (currentLevel == 1) return 100;
-        if (currentLevel == 2) return 300;
-        if (currentLevel == 3) return 600;
-        if (currentLevel == 4) return 1000;
-        if (currentLevel == 5) return 1500;
-        return (currentLevel - 4) * 500 + 1500;
-    }
-    
-    // ✅ Pause system
+
+    // ─── Admin config ─────────────────────────
     function pause() external onlyOwner {
         paused = true;
     }
-    
+
     function unpause() external onlyOwner {
         paused = false;
     }
-    
-    // ✅ Set NexaID address (owner only)
+
     function setNexaID(address _nexaid) external onlyOwner {
+        require(_nexaid != address(0), "Invalid address");
         nexaid = INexaID(_nexaid);
     }
-    
-    // ✅ Set bounty percentage
+
+    function setHarvestCooldown(uint _cooldown) external onlyOwner {
+        harvestCooldown = _cooldown;
+        emit CooldownUpdated(_cooldown);
+    }
+
+    function setPerformanceFee(uint _fee) external onlyOwner {
+        require(_fee <= 50, "Fee cannot exceed 50%");
+        performanceFee = _fee;
+        emit FeeUpdated(_fee);
+    }
+
     function setRebalanceBounty(uint _bounty) external onlyOwner {
+        require(_bounty <= 100, "Bounty cannot exceed 1%");
         rebalanceBounty = _bounty;
+        emit BountyPercentUpdated(_bounty);
+    }
+
+    function setMaxLevelBonus(uint _maxBonus) external onlyOwner {
+        require(_maxBonus <= 100, "Max bonus cannot exceed 100%");
+        maxLevelBonus = _maxBonus;
+        emit MaxLevelBonusUpdated(_maxBonus);
+    }
+
+    function emergencyWithdraw(address token, uint amount) external onlyOwner {
+        if (token == address(0)) {
+            (bool ok, ) = payable(owner).call{value: amount}("");
+            require(ok, "ETH transfer failed");
+        } else {
+            require(IERC20(token).transfer(owner, amount), "Token transfer failed");
+        }
+    }
+
+    // ─── View functions ───────────────────────
+    function getVaultInfo() external view returns (
+        uint totalDeposits_,
+        uint totalYield_,
+        uint alphaVault_,
+        uint stableCore_,
+        uint riskGuard_,
+        uint currentSignal
+    ) {
+        return (totalDeposits, totalYield, alphaVault, stableCore, riskGuard, _getSignal());
+    }
+
+    function getUserBasicInfo(address user) external view returns (
+        uint balance,
+        uint reward,
+        uint userXP,
+        uint userLevel,
+        uint lastHarvestTime
+    ) {
+        return (
+            balances[user],
+            rewards[user],
+            xp[user],
+            level[user],
+            lastHarvest[user]
+        );
+    }
+
+    function getUserBonusInfo(address user) external view returns (
+        uint nextLevelXP,
+        uint levelBonus,
+        uint reputationBonus
+    ) {
+        return (
+            getNextLevelXP(user),
+            _getLevelBonus(user),
+            getReputationBonus(user)
+        );
+    }
+
+    function getUserInfo(address user) external view returns (UserInfo memory) {
+        return UserInfo({
+            balance:         balances[user],
+            reward:          rewards[user],
+            userXP:          xp[user],
+            userLevel:       level[user],
+            lastHarvestTime: lastHarvest[user],
+            nextLevelXP:     getNextLevelXP(user),
+            levelBonus:      _getLevelBonus(user),
+            reputationBonus: getReputationBonus(user)
+        });
     }
 }
