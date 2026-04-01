@@ -71,9 +71,9 @@ User → Telegram Bot → Node.js Backend → Smart Contracts → HashKey Chain
 
 ## 🛠️ Setup
 
-### 1️⃣ Clone Repo
+### 1️⃣ Clone Repo 
 
-git clone <your-repo>
+git clone https://github.com/Outlier1217/ssv-telegram-bot
 cd ssv-telegram-bot
 
 ---
